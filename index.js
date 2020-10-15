@@ -1,19 +1,19 @@
+const http = require('http');
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+const TOKEN_PATH = 'token.json';
+const SPREADSHEET_ID = '15zTaFzv_zYBXaTOfEyxvTStADPex7yDaU-Aapwl3ovA';
+const RANGE = 'Sheet1';
+const PORT = 3000;
 const fs = require('fs');
 const readline = require('readline');
 const {google} = require('googleapis');
 
-// If modifying these scopes, delete token.json.
-const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
-// The file token.json stores the user's access and refresh tokens, and is
-// created automatically when the authorization flow completes for the first
-// time.
-const TOKEN_PATH = 'token.json';
 
 // Load client secrets from a local file.
 fs.readFile('credentials.json', (err, content) => {
   if (err) return console.log('Error loading client secret file:', err);
   // Authorize a client with credentials, then call the Google Sheets API.
-  authorize(JSON.parse(content), listMajors);
+  authorize(JSON.parse(content), datapull);
 });
 
 /**
@@ -66,24 +66,63 @@ function getNewToken(oAuth2Client, callback) {
   });
 }
 
+function createServerAndGoogleSheetsObj(oAuth2Client) {
+    
+    const sheets = google.sheets({ version: 'v4', auth: oAuth2Client });
+
+    const server = http.createServer((request, response) => {
+
+        if (request.method === 'POST') {
+            
+            // request object is a 'stream' so we must wait for it to finish
+            let body = '';
+            let bodyParsed = {};
+
+            request.on('data', chunk => {
+                body += chunk;
+            });
+
+            request.on('end', () => {
+                bodyParsed = JSON.parse(body);
+                saveDataAndSendResponse(bodyParsed.data, sheets, response);
+            });
+
+        } else {
+
+            // normal GET response for testing the endpoint
+            response.end('Request received');
+
+        }
+
+    });
+
+    server.listen(PORT, (err) => {
+        if (err) {
+            return console.log('something bad happened', err)
+        }
+        console.log(`server is listening on ${PORT}`)
+    });
+
+}
+
 /**
  * Prints the names and majors of students in a sample spreadsheet:
  * @see https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
  * @param {google.auth.OAuth2} auth The authenticated Google OAuth client.
  */
-function listMajors(auth) {
+function datapull(auth) {
   const sheets = google.sheets({version: 'v4', auth});
   sheets.spreadsheets.values.get({
-    spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
-    range: 'Class Data!A2:E',
+    spreadsheetId: '1FG-qVErFV72d6hswBl3lwozY7QOv_umc2txMY6NLQGA',
+    range: 'Sheet1!A1',
   }, (err, res) => {
     if (err) return console.log('The API returned an error: ' + err);
     const rows = res.data.values;
     if (rows.length) {
-      console.log('Name, Major:');
-      // Print columns A and E, which correspond to indices 0 and 4.
+      console.log('Spreadsheet:');
+      // Print columns A
       rows.map((row) => {
-        console.log(`${row[0]}, ${row[4]}`);
+        console.log(`${row[0]}`);
       });
     } else {
       console.log('No data found.');
